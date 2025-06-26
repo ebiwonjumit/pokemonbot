@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokemon RL Bot Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-gamepad"></i> Pokemon RL Bot Dashboard</h1>
+                <div class="status-indicators">
+                    <div class="status-item">
+                        <i class="fas fa-circle" id="connection-status"></i>
+                        <span id="connection-text">Connecting...</span>
+                    </div>
+                    <div class="status-item">
+                        <i class="fas fa-play-circle" id="training-status"></i>
+                        <span id="training-text">Stopped</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Left Panel - Game View -->
+            <div class="left-panel">
+                <div class="game-container">
+                    <div class="game-header">
+                        <h2><i class="fas fa-tv"></i> Game View</h2>
+                        <div class="game-controls">
+                            <button id="start-streaming-btn" class="btn btn-primary">
+                                <i class="fas fa-play"></i> Start Stream
+                            </button>
+                            <button id="stop-streaming-btn" class="btn btn-secondary" disabled>
+                                <i class="fas fa-stop"></i> Stop Stream
+                            </button>
+                        </div>
+                    </div>
+                    <div class="game-screen">
+                        <img id="game-frame" src="" alt="Game Screen" />
+                        <div class="overlay" id="game-overlay">
+                            <div class="overlay-content">
+                                <i class="fas fa-play-circle"></i>
+                                <p>Click "Start Stream" to view game</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="frame-info">
+                        <span>FPS: <span id="fps-counter">0</span></span>
+                        <span>Resolution: <span id="resolution">-</span></span>
+                    </div>
+                </div>
+
+                <!-- Manual Controls -->
+                <div class="controls-container">
+                    <h3><i class="fas fa-gamepad"></i> Manual Controls</h3>
+                    <div class="control-pad">
+                        <div class="dpad">
+                            <button class="dpad-btn up" data-action="0" title="Up">
+                                <i class="fas fa-arrow-up"></i>
+                            </button>
+                            <button class="dpad-btn left" data-action="1" title="Left">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <button class="dpad-btn center" data-action="8" title="No Action">
+                                <i class="fas fa-circle"></i>
+                            </button>
+                            <button class="dpad-btn right" data-action="2" title="Right">
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                            <button class="dpad-btn down" data-action="3" title="Down">
+                                <i class="fas fa-arrow-down"></i>
+                            </button>
+                        </div>
+                        <div class="action-buttons">
+                            <button class="action-btn" data-action="4" title="A Button">A</button>
+                            <button class="action-btn" data-action="5" title="B Button">B</button>
+                            <button class="action-btn" data-action="6" title="Start">START</button>
+                            <button class="action-btn" data-action="7" title="Select">SELECT</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - Metrics and Controls -->
+            <div class="right-panel">
+                <!-- Training Controls -->
+                <div class="section">
+                    <h2><i class="fas fa-cogs"></i> Training Controls</h2>
+                    <div class="control-buttons">
+                        <button id="start-training-btn" class="btn btn-success">
+                            <i class="fas fa-play"></i> Start Training
+                        </button>
+                        <button id="stop-training-btn" class="btn btn-danger" disabled>
+                            <i class="fas fa-stop"></i> Stop Training
+                        </button>
+                        <button id="reset-env-btn" class="btn btn-warning">
+                            <i class="fas fa-refresh"></i> Reset Environment
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Current Episode Info -->
+                <div class="section">
+                    <h3><i class="fas fa-info-circle"></i> Current Episode</h3>
+                    <div class="episode-stats">
+                        <div class="stat-item">
+                            <label>Episode:</label>
+                            <span id="current-episode">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Total Reward:</label>
+                            <span id="total-reward">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Steps:</label>
+                            <span id="step-count">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Last Action:</label>
+                            <span id="last-action">None</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Training Metrics -->
+                <div class="section">
+                    <h3><i class="fas fa-chart-line"></i> Training Metrics</h3>
+                    <div class="metrics-container">
+                        <canvas id="reward-chart" width="400" height="200"></canvas>
+                    </div>
+                    <div class="metrics-stats">
+                        <div class="stat-item">
+                            <label>Average Reward:</label>
+                            <span id="avg-reward">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Best Reward:</label>
+                            <span id="best-reward">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Episodes Completed:</label>
+                            <span id="episodes-completed">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Training Time:</label>
+                            <span id="training-time">00:00:00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Agent Performance -->
+                <div class="section">
+                    <h3><i class="fas fa-robot"></i> Agent Performance</h3>
+                    <div class="performance-container">
+                        <canvas id="performance-chart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+
+                <!-- System Info -->
+                <div class="section">
+                    <h3><i class="fas fa-server"></i> System Info</h3>
+                    <div class="system-stats">
+                        <div class="stat-item">
+                            <label>Connected Clients:</label>
+                            <span id="client-count">1</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Server Uptime:</label>
+                            <span id="server-uptime">00:00:00</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>Memory Usage:</label>
+                            <span id="memory-usage">- MB</span>
+                        </div>
+                        <div class="stat-item">
+                            <label>GPU Usage:</label>
+                            <span id="gpu-usage">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Notifications -->
+        <div id="notifications" class="notifications"></div>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    </div>
+
+    <!-- Action mapping for keyboard controls -->
+    <div class="action-mapping" style="display: none;">
+        {
+            "ArrowUp": 0,
+            "ArrowLeft": 1,
+            "ArrowRight": 2,
+            "ArrowDown": 3,
+            "KeyZ": 4,
+            "KeyX": 5,
+            "Enter": 6,
+            "Space": 7,
+            "Escape": 8
+        }
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

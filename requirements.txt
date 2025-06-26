@@ -1,0 +1,57 @@
+# Core dependencies
+numpy>=1.24.0
+opencv-python>=4.8.0
+pillow>=10.0.0
+psutil>=5.9.0
+
+# Reinforcement Learning
+stable-baselines3>=2.1.0
+gym>=0.26.0
+gymnasium>=0.29.0
+# torch>=2.1.0  # Install separately with conda or wait for Python 3.13 support
+# torchvision>=0.16.0  # Install separately with conda
+
+# Emulator and ROM handling - Updated for Python 3.13 compatibility
+# pygbm==0.1.0  # This package may not be compatible with Python 3.13
+pyautogui>=0.9.54
+pynput>=1.7.6
+
+# Web framework and real-time communication
+flask>=2.3.3
+flask-socketio>=5.3.6
+flask-cors>=4.0.0
+eventlet>=0.33.3
+
+# Data processing and utilities
+pandas>=2.1.1
+matplotlib>=3.8.0
+seaborn>=0.12.2
+tqdm>=4.66.1
+click>=8.1.7
+
+# Logging and monitoring
+# wandb>=0.15.12  # Optional for now
+tensorboard>=2.14.1
+# Cloud storage
+boto3>=1.28.0
+google-cloud-storage>=2.10.0
+
+# Development and testing
+pytest>=7.4.0
+black>=23.9.0
+flake8>=6.1.0
+mypy>=1.6.0
+
+# Docker and deployment
+gunicorn>=21.2.0
+redis>=5.0.0
+
+# Image processing for frame preprocessing
+scikit-image>=0.21.0
+
+# Memory management and performance
+memory-profiler>=0.61.0
+
+# Configuration management
+python-dotenv>=1.0.0
+pyyaml>=6.0.0

@@ -1,0 +1,128 @@
+{
+    "emulator": {
+        "vbam_path": "vbam",
+        "rom_path": "roms/pokemon_leafgreen.gba",
+        "save_path": "saves/pokemon_leafgreen.sav",
+        "headless": true,
+        "frame_skip": 4,
+        "speed_multiplier": 1.0,
+        "sound_enabled": false,
+        "display_width": 240,
+        "display_height": 160
+    },
+    "training": {
+        "total_timesteps": 1000000,
+        "learning_rate": 0.0003,
+        "batch_size": 64,
+        "n_epochs": 10,
+        "gamma": 0.99,
+        "clip_range": 0.2,
+        "save_frequency": 10000,
+        "log_frequency": 1000,
+        "eval_frequency": 50000,
+        "n_eval_episodes": 10
+    },
+    "environment": {
+        "action_space_size": 9,
+        "observation_space": [84, 84, 4],
+        "reward_scaling": 1.0,
+        "max_episode_steps": 10000,
+        "frame_stack": 4,
+        "skip_frames": 4,
+        "grayscale": true,
+        "resize_to": [84, 84]
+    },
+    "agent": {
+        "policy": "CnnPolicy",
+        "learning_rate": 0.0003,
+        "n_steps": 2048,
+        "batch_size": 64,
+        "n_epochs": 10,
+        "gamma": 0.99,
+        "gae_lambda": 0.95,
+        "clip_range": 0.2,
+        "clip_range_vf": null,
+        "normalize_advantage": true,
+        "ent_coef": 0.01,
+        "vf_coef": 0.5,
+        "max_grad_norm": 0.5,
+        "use_sde": false,
+        "sde_sample_freq": -1,
+        "target_kl": null
+    },
+    "neural_network": {
+        "architecture": "custom_cnn",
+        "features_dim": 512,
+        "activation": "relu",
+        "dropout": 0.1,
+        "batch_norm": true,
+        "residual_connections": false
+    },
+    "web": {
+        "host": "0.0.0.0",
+        "port": 5000,
+        "debug": false,
+        "secret_key": "pokemon-rl-production-key-change-this",
+        "cors_origins": ["*"],
+        "max_content_length": "16MB"
+    },
+    "logging": {
+        "level": "INFO",
+        "file": "logs/pokemon_rl.log",
+        "max_size": "10MB",
+        "backup_count": 5,
+        "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        "tensorboard_log": "logs/tensorboard"
+    },
+    "metrics": {
+        "track_performance": true,
+        "save_episodes": true,
+        "screenshot_frequency": 1000,
+        "video_frequency": 10000,
+        "metrics_file": "logs/metrics.json"
+    },
+    "cloud_storage": {
+        "enabled": false,
+        "provider": "aws",
+        "bucket_name": "pokemon-rl-models",
+        "region": "us-east-1",
+        "upload_frequency": 50000,
+        "keep_local_copies": 3
+    },
+    "rewards": {
+        "exploration": {
+            "new_area_bonus": 10.0,
+            "movement_penalty": -0.01
+        },
+        "progress": {
+            "level_up_bonus": 50.0,
+            "evolution_bonus": 100.0,
+            "gym_badge_bonus": 200.0,
+            "elite_four_bonus": 500.0
+        },
+        "battle": {
+            "win_bonus": 20.0,
+            "lose_penalty": -10.0,
+            "damage_dealt": 0.1,
+            "damage_received": -0.1
+        },
+        "items": {
+            "item_found_bonus": 5.0,
+            "pokeball_bonus": 15.0,
+            "rare_item_bonus": 25.0
+        },
+        "time": {
+            "time_penalty": -0.001,
+            "idle_penalty": -1.0,
+            "stuck_penalty": -5.0
+        }
+    },
+    "game_features": {
+        "auto_save": true,
+        "save_states": true,
+        "load_save_on_start": true,
+        "reset_on_stuck": true,
+        "stuck_threshold": 1000,
+        "max_idle_time": 300
+    }
+}

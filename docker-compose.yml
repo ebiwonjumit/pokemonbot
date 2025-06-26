@@ -1,0 +1,225 @@
+version: '3.8'
+
+services:
+  # Pokemon RL Bot Web Dashboard (CPU)
+  pokemon-bot-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-latest}
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+    image: pokemon-rl-bot:${VERSION:-latest}
+    container_name: pokemon-bot-web
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./roms:/app/roms:ro
+      - ./saves:/app/saves
+      - ./models:/app/models
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config.json:/app/config.json:ro
+    environment:
+      - ENV=production
+      - PYTHONPATH=/app/src
+      - FLASK_APP=src.web.app
+    networks:
+      - pokemon-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pokemon-bot.rule=Host(`pokemon-bot.localhost`)"
+      - "traefik.http.services.pokemon-bot.loadbalancer.server.port=5000"
+
+  # Pokemon RL Bot GPU Training
+  pokemon-bot-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+      args:
+        VERSION: ${VERSION:-latest}
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+    image: pokemon-rl-bot-gpu:${VERSION:-latest}
+    container_name: pokemon-bot-gpu
+    restart: unless-stopped
+    volumes:
+      - ./roms:/app/roms:ro
+      - ./saves:/app/saves
+      - ./models:/app/models
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config.json:/app/config.json:ro
+    environment:
+      - ENV=production
+      - PYTHONPATH=/app/src
+      - CUDA_VISIBLE_DEVICES=0
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    networks:
+      - pokemon-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles:
+      - gpu
+    command: python scripts/train.py --config config.json --gpu cuda --timesteps 1000000
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    container_name: pokemon-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - pokemon-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL for metrics and logging
+  postgres:
+    image: postgres:15-alpine
+    container_name: pokemon-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: pokemon_rl
+      POSTGRES_USER: pokemon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pokemon123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    networks:
+      - pokemon-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pokemon"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx reverse proxy and load balancer
+  nginx:
+    image: nginx:alpine
+    container_name: pokemon-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    networks:
+      - pokemon-network
+    depends_on:
+      - pokemon-bot-web
+    profiles:
+      - production
+
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: pokemon-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - pokemon-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    profiles:
+      - monitoring
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: pokemon-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - pokemon-network
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+
+  # TensorBoard for training visualization
+  tensorboard:
+    image: tensorflow/tensorflow:latest
+    container_name: pokemon-tensorboard
+    restart: unless-stopped
+    ports:
+      - "6006:6006"
+    volumes:
+      - ./logs/tensorboard:/logs:ro
+    networks:
+      - pokemon-network
+    command: tensorboard --logdir=/logs --host=0.0.0.0 --port=6006
+    profiles:
+      - monitoring
+
+  # Jupyter Notebook for development
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pokemon-rl-bot:${VERSION:-latest}
+    container_name: pokemon-jupyter
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/app/notebooks
+      - ./roms:/app/roms:ro
+      - ./saves:/app/saves
+      - ./models:/app/models
+      - ./logs:/app/logs
+      - ./data:/app/data
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+    networks:
+      - pokemon-network
+    command: jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token=''
+    profiles:
+      - development
+
+networks:
+  pokemon-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+  postgres_data:
+  prometheus_data:
+  grafana_data:

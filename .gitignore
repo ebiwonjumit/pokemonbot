@@ -1,0 +1,174 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+*.out
+
+# Models and checkpoints
+models/*.zip
+models/*.pkl
+models/*.pt
+models/*.pth
+*.ckpt
+
+# ROM files (should be added by user)
+roms/*.gba
+roms/*.gb
+roms/*.gbc
+
+# Save states
+saves/
+*.sav
+*.sgm
+*.ss*
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+.cache/
+
+# Screenshots and recordings (but allow some sample files)
+screenshots/
+recordings/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+*.avi
+*.mov
+*.webm
+# Allow sample/template images
+!sample_*.png
+!template_*.jpg
+!docs/images/
+
+# Data files (allow some config files but ignore large datasets)
+data/recordings/
+data/screenshots/
+data/datasets/
+data/raw/
+data/processed/
+*.csv
+*.pkl
+*.npy
+# Allow important config files
+!config.json
+!package.json
+!data/config/
+!data/templates/
+
+# Docker
+.dockerignore
+
+# Cloud deployment
+.aws/
+.gcp/
+terraform.tfstate*
+*.tfvars
+
+# MLflow
+mlruns/
+mlflow.db
+
+# Weights & Biases
+wandb/
+
+# TensorBoard
+runs/
+events.out.tfevents.*
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Pokemon RL Bot specific
+# Test screenshots (but allow important ones)
+test_screenshot.png
+dashboard_screenshot.png
+*.test.png
+
+# Emulator temporary files
+*.state
+*.state[0-9]
+*.rtc
+vbam.ini
+visualboyadvance.cfg
+
+# Training artifacts
+training_progress/
+checkpoints/
+experiment_logs/
+*.tensorboard
+
+# OS generated files
+.DS_Store?
+.Spotlight-V100
+.Trashes
+Icon?
+ehthumbs.db
+Thumbs.db
