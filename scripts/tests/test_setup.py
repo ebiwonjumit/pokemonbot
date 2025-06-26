@@ -15,7 +15,7 @@ import subprocess
 from pathlib import Path
 
 # Add src to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 def test_emulator():
     """Test VBA-M emulator access."""

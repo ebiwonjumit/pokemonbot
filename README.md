@@ -35,7 +35,7 @@ pip install -r requirements.txt
 cp /path/to/pokemon_leaf_green.gba roms/
 
 # Start web dashboard
-python simple_dashboard.py
+python scripts/simple_dashboard.py
 # Open http://localhost:7500
 ```
 
@@ -75,9 +75,23 @@ docker-compose -f docker-compose.gpu.yml up
 ## Testing
 
 ```bash
-# Test setup
-python test_setup.py
+# Run all tests
+python scripts/run_tests.py
 
-# Test bot control
-python test_bot_control.py
+# Individual tests  
+python scripts/tests/test_setup.py
+python scripts/tests/test_bot_control.py
+```
+
+## Cloud Deployment
+
+```bash
+# Deploy to GCP
+python scripts/deploy.py deploy
+
+# Manage instance
+python scripts/deploy.py start|stop|status
+
+# Test emulator in cloud
+python scripts/deploy.py test-emulator
 ```

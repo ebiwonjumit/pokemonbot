@@ -48,13 +48,7 @@
             "type": "shell",
             "command": "python",
             "args": [
-                "scripts/monitor.py",
-                "--config",
-                "config.json",
-                "--host",
-                "0.0.0.0",
-                "--port",
-                "5000"
+                "scripts/simple_dashboard.py"
             ],
             "group": "build",
             "presentation": {

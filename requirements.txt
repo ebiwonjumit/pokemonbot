@@ -32,9 +32,10 @@ click>=8.1.7
 # Logging and monitoring
 # wandb>=0.15.12  # Optional for now
 tensorboard>=2.14.1
-# Cloud storage
-boto3>=1.28.0
+
+# Cloud storage (GCP only)
 google-cloud-storage>=2.10.0
+google-cloud-compute>=1.14.0
 
 # Development and testing
 pytest>=7.4.0

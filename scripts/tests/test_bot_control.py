@@ -12,7 +12,7 @@ import numpy as np
 from pathlib import Path
 
 # Add the src directory to Python path so we can import our modules
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 def test_basic_emulator_control():
     """Test basic emulator control without our complex environment."""

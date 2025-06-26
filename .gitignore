@@ -78,6 +78,11 @@ recordings/
 *.gif
 *.mp4
 *.avi
+
+# Temporary test files
+test_screenshot.png
+dashboard_screenshot.png
+pokemon-rl-bot.tar.gz
 *.mov
 *.webm
 # Allow sample/template images
