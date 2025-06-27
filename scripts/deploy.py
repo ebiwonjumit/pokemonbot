@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Pokemon RL Bot Deployment Manager
-Simple Python wrapper for deployment operations.
+Simple Python wrapper for deployment operations with your pokebot-45 GCP project.
 """
 
 import os
@@ -27,19 +27,24 @@ def run_command(command, description):
         return False
 
 def deploy_to_gcp():
-    """Deploy to Google Cloud Platform."""
+    """Deploy to Google Cloud Platform using your pokebot-45 project."""
     script_path = Path(__file__).parent / "deploy-gcp.sh"
-    return run_command(["bash", str(script_path), "deploy"], "GCP Deployment")
+    return run_command(["bash", str(script_path), "deploy"], "GCP Deployment (pokebot-45)")
+
+def deploy_gpu():
+    """Deploy to GCP with GPU support."""
+    script_path = Path(__file__).parent / "deploy-gcp.sh"
+    return run_command(["bash", str(script_path), "deploy-gpu"], "GCP GPU Deployment (pokebot-45)")
 
 def start_instance():
     """Start the GCP instance."""
     script_path = Path(__file__).parent / "deploy-gcp.sh"
-    return run_command(["bash", str(script_path), "start"], "Start GCP Instance")
+    return run_command(["bash", str(script_path), "start"], "Start GCP Instance (pokemon-rl-bot)")
 
 def stop_instance():
     """Stop the GCP instance."""
     script_path = Path(__file__).parent / "deploy-gcp.sh"
-    return run_command(["bash", str(script_path), "stop"], "Stop GCP Instance")
+    return run_command(["bash", str(script_path), "stop"], "Stop GCP Instance (pokemon-rl-bot)")
 
 def test_emulator():
     """Test the emulator on GCP."""
@@ -54,16 +59,22 @@ def show_status():
 def main():
     parser = argparse.ArgumentParser(description="Pokemon RL Bot Deployment Manager")
     parser.add_argument("action", choices=[
-        "deploy", "start", "stop", "status", "test-emulator", "help"
+        "deploy", "deploy-gpu", "start", "stop", "status", "test-emulator", "help"
     ], help="Action to perform")
     
     args = parser.parse_args()
     
     print("🎮 Pokemon RL Bot - Deployment Manager")
     print("=" * 40)
+    print(f"GCP Project: pokebot-45")
+    print(f"Instance: pokemon-rl-bot")
+    print(f"Zone: us-central1-a")
+    print("=" * 40)
     
     if args.action == "deploy":
         success = deploy_to_gcp()
+    elif args.action == "deploy-gpu":
+        success = deploy_gpu()
     elif args.action == "start":
         success = start_instance()
     elif args.action == "stop":
@@ -73,16 +84,27 @@ def main():
     elif args.action == "test-emulator":
         success = test_emulator()
     elif args.action == "help":
-        parser.print_help()
-        print("\nAvailable actions:")
-        print("  deploy        - Deploy bot to GCP (full setup)")
-        print("  start         - Start existing GCP instance")
-        print("  stop          - Stop GCP instance")
+        print("\n📋 Available Actions:")
+        print("  deploy        - Deploy bot to GCP (CPU)")
+        print("  deploy-gpu    - Deploy bot to GCP (GPU)")
+        print("  start         - Start the GCP instance")
+        print("  stop          - Stop the GCP instance")
         print("  status        - Show instance status")
         print("  test-emulator - Test VBA-M emulator on GCP")
-        return 0
+        print("\n🚀 Quick Start:")
+        print("  python scripts/deploy.py deploy")
+        print("  python scripts/deploy.py start")
+        print("  python scripts/deploy.py test-emulator")
+        return True
+    else:
+        print(f"❌ Unknown action: {args.action}")
+        return False
     
-    return 0 if success else 1
+    if not success:
+        print("\n❌ Deployment failed!")
+        sys.exit(1)
+    else:
+        print("\n✅ Operation completed successfully!")
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

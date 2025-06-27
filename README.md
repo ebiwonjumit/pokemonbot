@@ -83,15 +83,26 @@ python scripts/tests/test_setup.py
 python scripts/tests/test_bot_control.py
 ```
 
-## Cloud Deployment
+## 🚀 Cloud Deployment (GCP)
+
+Your project is configured for your **pokebot-45** GCP project:
 
 ```bash
-# Deploy to GCP
+# Deploy to Google Cloud Platform
 python scripts/deploy.py deploy
 
-# Manage instance
-python scripts/deploy.py start|stop|status
+# Check status
+python scripts/deploy.py status
 
 # Test emulator in cloud
 python scripts/deploy.py test-emulator
+
+# Manage instance
+python scripts/deploy.py start|stop
 ```
+
+**GCP Configuration:**
+- Project: `pokebot-45`
+- Instance: `pokemon-rl-bot`
+- Zone: `us-central1-a`
+- Machine: `n1-standard-4` (CPU) or `deploy-gpu` for GPU support

@@ -8,16 +8,16 @@ set -e
 echo "🎮 Pokemon RL Bot - GCP Deployment"
 echo "=================================="
 
-# Configuration
-PROJECT_ID=${GOOGLE_CLOUD_PROJECT:-""}
+# Configuration - Using your exact GCP settings
+PROJECT_ID="pokebot-45"
 INSTANCE_NAME="pokemon-rl-bot"
-ZONE="us-central1-a"  # Good GPU availability
+ZONE="us-central1-a"
 MACHINE_TYPE="n1-standard-4"
 GPU_TYPE="nvidia-tesla-t4"
 GPU_COUNT=1
-DISK_SIZE="100GB"
-IMAGE_FAMILY="pytorch-latest-gpu"
-IMAGE_PROJECT="deeplearning-platform-release"
+DISK_SIZE="10"  # Size in GB (matching your 10GB configuration)
+IMAGE_FAMILY="debian-12"
+IMAGE_PROJECT="debian-cloud"
 
 # Colors
 GREEN='\033[0;32m'
@@ -85,22 +85,31 @@ create_instance() {
     # Create startup script
     cat > startup-script.sh << 'EOF'
 #!/bin/bash
-# Pokemon RL Bot startup script - Simple Python setup
+# Pokemon RL Bot startup script - Debian 12 compatible
 
 # Update system
 apt-get update -y
 
 # Install Python and pip
-apt-get install -y python3-pip python3-venv git
+apt-get install -y python3-pip python3-venv python3-dev git curl wget
 
-# Install VBA-M emulator
-apt-get install -y visualboyadvance-m
+# Install build tools for Python packages
+apt-get install -y build-essential cmake
 
-# Install virtual display for headless emulator
+# Install VBA-M emulator (might need to compile from source on Debian 12)
+apt-get install -y libsdl2-dev libsfml-dev libgl1-mesa-dev libglu1-mesa-dev
+# Try package manager first
+apt-get install -y visualboyadvance-m || {
+    echo "VBA-M not available in repos, will install manually later"
+}
+
+# Install virtual display for headless emulator  
 apt-get install -y xvfb x11vnc fluxbox
 
-# Install NVIDIA drivers and CUDA (for GPU support)
-apt-get install -y nvidia-driver-470 nvidia-cuda-toolkit
+# Install NVIDIA drivers (if GPU instance)
+apt-get install -y nvidia-driver nvidia-cuda-toolkit || {
+    echo "GPU drivers not available, continuing with CPU-only setup"
+}
 
 # Create project directory
 mkdir -p /home/pokemon-rl-bot
@@ -140,7 +149,7 @@ if command -v vbam &> /dev/null; then
     echo "✅ VBA-M installed"
     if [ -f "roms/pokemon_leaf_green.gba" ]; then
         echo "🎮 ROM file found, testing emulator..."
-        timeout 5s vbam roms/pokemon_leaf_green.gba --no-sound &
+        timeout 5s vbam roms/pokemon_leaf_green.gba &
         sleep 2
         if pgrep vbam > /dev/null; then
             echo "✅ VBA-M running successfully!"
@@ -152,7 +161,7 @@ if command -v vbam &> /dev/null; then
         echo "⚠️ No ROM file yet"
     fi
 else
-    echo "❌ VBA-M not found"
+    echo "❌ VBA-M not found - will need manual installation"
 fi
 TEST_EOF
 
@@ -161,23 +170,86 @@ chmod +x /home/pokemon-rl-bot/test_emulator.sh
 echo "Pokemon RL Bot VM ready!" > /tmp/startup-complete
 EOF
 
-    # Create the instance
+    # Create the instance (matching your exact Google Cloud configuration)
     gcloud compute instances create $INSTANCE_NAME \
+        --project=$PROJECT_ID \
         --zone=$ZONE \
         --machine-type=$MACHINE_TYPE \
-        --accelerator=type=$GPU_TYPE,count=$GPU_COUNT \
-        --image-family=$IMAGE_FAMILY \
-        --image-project=$IMAGE_PROJECT \
-        --boot-disk-size=$DISK_SIZE \
+        --network-interface=network-tier=PREMIUM,stack-type=IPV4_ONLY,subnet=default \
+        --metadata=enable-osconfig=TRUE \
         --maintenance-policy=TERMINATE \
-        --restart-on-failure \
+        --provisioning-model=STANDARD \
+        --service-account=604999196487-compute@developer.gserviceaccount.com \
+        --scopes=https://www.googleapis.com/auth/devstorage.read_only,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/service.management.readonly,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/trace.append \
+        --enable-display-device \
+        --create-disk=auto-delete=yes,boot=yes,device-name=$INSTANCE_NAME,image=projects/$IMAGE_PROJECT/global/images/debian-12-bookworm-v20250610,mode=rw,size=10,type=pd-balanced \
+        --no-shielded-secure-boot \
+        --shielded-vtpm \
+        --shielded-integrity-monitoring \
+        --labels=goog-ops-agent-policy=v2-x86-template-1-4-0,goog-ec-src=vm_add-gcloud \
+        --reservation-affinity=any \
         --metadata-from-file startup-script=startup-script.sh \
-        --scopes=storage-rw \
         --tags=pokemon-rl-bot
     
     print_success "Instance created: $INSTANCE_NAME"
     
+    # Ensure the instance has the correct tags for firewall rules
+    gcloud compute instances add-tags $INSTANCE_NAME --zone=$ZONE --tags=pokemon-rl-bot || echo "Tags already applied"
+    
     # Clean up
+    rm -f startup-script.sh
+}
+
+# Create GPU instance (if needed later)
+create_instance_gpu() {
+    print_status "Creating Pokemon RL Bot GPU instance..."
+    
+    # Check if instance already exists
+    if gcloud compute instances describe $INSTANCE_NAME --zone=$ZONE &>/dev/null; then
+        print_error "Instance $INSTANCE_NAME already exists in zone $ZONE"
+        read -p "Delete and recreate? (y/n): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            gcloud compute instances delete $INSTANCE_NAME --zone=$ZONE --quiet
+        else
+            exit 1
+        fi
+    fi
+    
+    # Use same startup script as CPU version
+    cat > startup-script.sh << 'EOF'
+#!/bin/bash
+# Pokemon RL Bot startup script - Debian 12 compatible with GPU
+apt-get update -y
+apt-get install -y python3-pip python3-venv python3-dev git curl wget build-essential cmake
+apt-get install -y libsdl2-dev libsfml-dev libgl1-mesa-dev libglu1-mesa-dev
+apt-get install -y visualboyadvance-m || echo "VBA-M not available in repos"
+apt-get install -y xvfb x11vnc fluxbox
+apt-get install -y nvidia-driver nvidia-cuda-toolkit || echo "GPU drivers not available"
+mkdir -p /home/pokemon-rl-bot
+echo "export DISPLAY=:99" >> /etc/environment
+echo "Pokemon RL Bot GPU VM ready!" > /tmp/startup-complete
+EOF
+    
+    # Create GPU instance
+    gcloud compute instances create $INSTANCE_NAME \
+        --project=$PROJECT_ID \
+        --zone=$ZONE \
+        --machine-type=$MACHINE_TYPE \
+        --accelerator=type=$GPU_TYPE,count=$GPU_COUNT \
+        --network-interface=network-tier=PREMIUM,stack-type=IPV4_ONLY,subnet=default \
+        --maintenance-policy=TERMINATE \
+        --provisioning-model=STANDARD \
+        --service-account=604999196487-compute@developer.gserviceaccount.com \
+        --scopes=https://www.googleapis.com/auth/devstorage.read_only,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/service.management.readonly,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/trace.append \
+        --enable-display-device \
+        --create-disk=auto-delete=yes,boot=yes,device-name=$INSTANCE_NAME,image=projects/$IMAGE_PROJECT/global/images/debian-12-bookworm-v20250610,mode=rw,size=$DISK_SIZE,type=pd-balanced \
+        --shielded-vtpm \
+        --shielded-integrity-monitoring \
+        --metadata-from-file startup-script=startup-script.sh \
+        --tags=pokemon-rl-bot
+    
+    print_success "GPU Instance created: $INSTANCE_NAME"
     rm -f startup-script.sh
 }
 
@@ -278,7 +350,8 @@ show_help() {
     echo "Usage: $0 [command]"
     echo ""
     echo "Commands:"
-    echo "  deploy     Deploy bot to GCP (full setup)"
+    echo "  deploy     Deploy bot to GCP (CPU instance)"
+    echo "  deploy-gpu Deploy bot to GCP (GPU instance - costs more)"
     echo "  start      Start existing instance"
     echo "  stop       Stop instance"
     echo "  status     Show instance status"
@@ -301,6 +374,19 @@ main() {
             upload_code
             start_bot
             ;;
+        deploy-gpu)
+            check_gcloud
+            setup_project
+            enable_apis
+            # Set GPU configuration
+            GPU_TYPE="nvidia-tesla-t4"
+            GPU_COUNT=1
+            MACHINE_TYPE="n1-standard-4"
+            create_instance_gpu
+            setup_firewall
+            upload_code
+            start_bot
+            ;;
         start)
             gcloud compute instances start $INSTANCE_NAME --zone=$ZONE
             ;;
@@ -314,11 +400,11 @@ main() {
             gcloud compute ssh $INSTANCE_NAME --zone=$ZONE
             ;;
         logs)
-            gcloud compute ssh $INSTANCE_NAME --zone=$ZONE --command="cd /home/pokemon-rl-bot && tail -f bot.log"
+            gcloud compute ssh $INSTANCE_NAME --zone=$ZONE --command="cd /home/titoebiwonjumi && tail -f bot.log"
             ;;
         test-emulator)
             print_status "Testing VBA-M emulator on cloud instance..."
-            gcloud compute ssh $INSTANCE_NAME --zone=$ZONE --command="cd /home/pokemon-rl-bot && ./test_emulator.sh"
+            gcloud compute ssh $INSTANCE_NAME --zone=$ZONE --command="cd /home/titoebiwonjumi && ./test_cloud_emulator.sh"
             ;;
         delete)
             read -p "Are you sure you want to delete the instance? (y/n): " -n 1 -r
