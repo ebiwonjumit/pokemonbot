@@ -17,25 +17,51 @@ from flask_socketio import SocketIO, emit
 import json
 import psutil
 
-# Add src to path for imports
-sys.path.append(str(Path(__file__).parent / "src"))
+# Add src to path for imports (go up two levels from scripts/dashboards to root)
+project_root = Path(__file__).parent.parent.parent
+sys.path.append(str(project_root / "src"))
 
-from utils.logger import setup_logger
-from utils.metrics import MetricsCollector
+# Simple logging setup for local development
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Try to import our utilities, fallback to simple alternatives if not available
+try:
+    from utils.logger import setup_logger
+    from utils.metrics import MetricsCollector
+except ImportError:
+    logger.warning("Could not import utils modules, using simple alternatives")
+    setup_logger = lambda name: logger
+    
+    class MockMetrics:
+        def collect(self):
+            return {}
+    
+    MetricsCollector = MockMetrics
 
 class LocalDashboard:
     def __init__(self):
+        # Get project root path
+        self.project_root = Path(__file__).parent.parent.parent
+        
         self.app = Flask(__name__, 
-                        template_folder='src/web/templates',
-                        static_folder='src/web/static')
+                        template_folder=str(self.project_root / 'src/web/templates'),
+                        static_folder=str(self.project_root / 'src/web/static'))
         self.app.config['SECRET_KEY'] = 'pokemon-rl-bot-local'
         self.socketio = SocketIO(self.app, cors_allowed_origins="*")
         
-        self.logger = setup_logger("local_dashboard")
-        self.metrics = MetricsCollector()
+        try:
+            self.logger = setup_logger("local_dashboard")
+        except:
+            self.logger = logger
+            
+        try:
+            self.metrics = MetricsCollector()
+        except:
+            self.metrics = MockMetrics()
         
         # Local paths
-        self.project_root = Path(__file__).parent
         self.rom_path = self.project_root / "roms" / "pokemon_leaf_green.gba"
         self.logs_dir = self.project_root / "logs"
         
@@ -92,6 +118,22 @@ class LocalDashboard:
         def get_logs():
             return jsonify(self.get_recent_logs())
             
+        @self.app.route('/api/test_screenshot')
+        def test_screenshot():
+            screenshot = self.capture_screenshot()
+            if screenshot:
+                return jsonify({'success': True, 'message': 'Screenshot captured', 'size': len(screenshot)})
+            else:
+                return jsonify({'success': False, 'message': 'Screenshot failed'})
+                
+        @self.app.route('/api/start_streaming', methods=['POST'])
+        def start_streaming():
+            if not self.screenshot_running:
+                self.start_screenshot_capture()
+                return jsonify({'success': True, 'message': 'Screenshot streaming started'})
+            else:
+                return jsonify({'success': False, 'message': 'Streaming already active'})
+            
     def setup_socketio(self):
         """Set up WebSocket handlers"""
         
@@ -108,13 +150,16 @@ class LocalDashboard:
         def handle_screenshot_request():
             screenshot = self.capture_screenshot()
             if screenshot:
-                emit('screenshot_data', {'image': screenshot})
+                emit('frame', {'data': screenshot})
                 
     def is_emulator_running(self):
         """Check if VBA-M emulator is running"""
-        for proc in psutil.process_iter(['pid', 'name']):
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
             try:
-                if 'vbam' in proc.info['name'].lower():
+                name = proc.info['name'].lower()
+                cmdline = ' '.join(proc.info['cmdline'] or []).lower()
+                if ('vbam' in name or 'visualboy' in name or 
+                    'vbam' in cmdline or 'pokemon' in cmdline):
                     return True
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
@@ -261,13 +306,31 @@ class LocalDashboard:
         """Capture screenshot of the emulator window (macOS/Linux)"""
         try:
             if sys.platform == 'darwin':  # macOS
-                # Use screencapture to get the VBA-M window
+                # Use screencapture with temporary file (stdout doesn't work reliably)
+                import tempfile
+                import os
+                
+                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                    temp_path = tmp_file.name
+                
                 result = subprocess.run([
-                    'screencapture', '-x', '-t', 'png', '-'
+                    'screencapture', '-x', '-t', 'png', temp_path
                 ], capture_output=True, timeout=5)
                 
-                if result.returncode == 0:
-                    return base64.b64encode(result.stdout).decode('utf-8')
+                if result.returncode == 0 and os.path.exists(temp_path):
+                    try:
+                        with open(temp_path, 'rb') as f:
+                            screenshot_data = base64.b64encode(f.read()).decode('utf-8')
+                        os.unlink(temp_path)  # Clean up temp file
+                        return screenshot_data
+                    except Exception as e:
+                        self.logger.error(f"Error reading screenshot file: {e}")
+                        if os.path.exists(temp_path):
+                            os.unlink(temp_path)
+                else:
+                    self.logger.error(f"screencapture failed: {result.stderr.decode()}")
+                    if os.path.exists(temp_path):
+                        os.unlink(temp_path)
                     
             else:  # Linux with GUI
                 # Use scrot or import
@@ -306,7 +369,7 @@ class LocalDashboard:
             try:
                 screenshot = self.capture_screenshot()
                 if screenshot:
-                    self.socketio.emit('screenshot_data', {'image': screenshot})
+                    self.socketio.emit('frame', {'data': screenshot})
                 time.sleep(0.5)  # 2 FPS for local testing
             except Exception as e:
                 self.logger.error(f"Screenshot loop error: {e}")

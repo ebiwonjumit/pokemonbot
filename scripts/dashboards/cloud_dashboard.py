@@ -15,22 +15,53 @@ from pathlib import Path
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO, emit
 import json
-import logging
+import psutil
+
+# Add src to path for imports (go up two levels from scripts/dashboards to root)
+project_root = Path(__file__).parent.parent.parent
+sys.path.append(str(project_root / "src"))
 
 # Simple logging setup for cloud environment
+import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Try to import our utilities, fallback to simple alternatives if not available
+try:
+    from utils.logger import setup_logger
+    from utils.metrics import MetricsCollector
+except ImportError:
+    logger.warning("Could not import utils modules, using simple alternatives")
+    setup_logger = lambda name: logger
+    
+    class MockMetrics:
+        def collect(self):
+            return {}
+    
+    MetricsCollector = MockMetrics
+
 class CloudDashboard:
     def __init__(self):
+        # Get project root path
+        self.project_root = Path(__file__).parent.parent.parent
+        
         self.app = Flask(__name__, 
-                        template_folder='src/web/templates',
-                        static_folder='src/web/static')
+                        template_folder=str(self.project_root / 'src/web/templates'),
+                        static_folder=str(self.project_root / 'src/web/static'))
         self.app.config['SECRET_KEY'] = 'pokemon-rl-bot-cloud'
         self.socketio = SocketIO(self.app, cors_allowed_origins="*")
         
+        try:
+            self.logger = setup_logger("cloud_dashboard")
+        except:
+            self.logger = logger
+            
+        try:
+            self.metrics = MetricsCollector()
+        except:
+            self.metrics = MockMetrics()
+        
         # Cloud paths
-        self.project_root = Path(__file__).parent
         self.rom_path = self.project_root / "roms" / "pokemon_leaf_green.gba"
         self.logs_dir = self.project_root / "logs"
         
@@ -95,39 +126,63 @@ class CloudDashboard:
             success, message = self.test_virtual_display()
             return jsonify({'success': success, 'message': message})
             
+        @self.app.route('/api/test_screenshot')
+        def test_screenshot():
+            screenshot = self.capture_screenshot()
+            if screenshot:
+                return jsonify({'success': True, 'message': 'Screenshot captured', 'size': len(screenshot)})
+            else:
+                return jsonify({'success': False, 'message': 'Screenshot failed'})
+                
+        @self.app.route('/api/start_streaming', methods=['POST'])
+        def start_streaming():
+            if not self.screenshot_running:
+                self.start_screenshot_capture()
+                return jsonify({'success': True, 'message': 'Screenshot streaming started'})
+            else:
+                return jsonify({'success': False, 'message': 'Streaming already active'})
+            
     def setup_socketio(self):
         """Set up WebSocket handlers"""
         
         @self.socketio.on('connect')
         def handle_connect():
-            logger.info("Client connected to cloud dashboard")
+            self.logger.info("Client connected to cloud dashboard")
             emit('status_update', self.get_status_data())
             
         @self.socketio.on('disconnect')
         def handle_disconnect():
-            logger.info("Client disconnected from cloud dashboard")
+            self.logger.info("Client disconnected from cloud dashboard")
             
         @self.socketio.on('request_screenshot')
         def handle_screenshot_request():
             screenshot = self.capture_screenshot()
             if screenshot:
-                emit('screenshot_data', {'image': screenshot})
+                emit('frame', {'data': screenshot})
                 
     def is_emulator_running(self):
         """Check if VBA-M emulator is running"""
-        try:
-            result = subprocess.run(['pgrep', 'vbam'], capture_output=True, text=True)
-            return result.returncode == 0 and result.stdout.strip()
-        except FileNotFoundError:
-            return False
-            
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                name = proc.info['name'].lower()
+                cmdline = ' '.join(proc.info['cmdline'] or []).lower()
+                if ('vbam' in name or 'visualboy' in name or 
+                    'vbam' in cmdline or 'pokemon' in cmdline):
+                    return True
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return False
+        
     def is_bot_running(self):
         """Check if the RL bot is running"""
-        try:
-            result = subprocess.run(['pgrep', '-f', 'train.py'], capture_output=True, text=True)
-            return result.returncode == 0 and result.stdout.strip()
-        except FileNotFoundError:
-            return False
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                cmdline = ' '.join(proc.info['cmdline'] or [])
+                if 'train.py' in cmdline or 'pokemon' in cmdline.lower():
+                    return True
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return False
             
     def check_display(self):
         """Check if virtual display is available"""
@@ -335,10 +390,10 @@ class CloudDashboard:
             try:
                 screenshot = self.capture_screenshot()
                 if screenshot:
-                    self.socketio.emit('screenshot_data', {'image': screenshot})
+                    self.socketio.emit('frame', {'data': screenshot})
                 time.sleep(1.0)  # 1 FPS for cloud to reduce bandwidth
             except Exception as e:
-                logger.error(f"Screenshot loop error: {e}")
+                self.logger.error(f"Screenshot loop error: {e}")
                 time.sleep(2)
                 
     def get_system_info(self):

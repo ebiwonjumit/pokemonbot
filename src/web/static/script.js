@@ -55,20 +55,25 @@ class PokemonDashboard {
         this.socket = io();
         
         this.socket.on('connect', () => {
-            console.log('Connected to server');
+            console.log('✅ Connected to server via WebSocket');
             this.isConnected = true;
             this.updateConnectionStatus(true);
             this.showNotification('Connected to server', 'success');
+            
+            // Test: Request a screenshot immediately
+            console.log('🔄 Requesting test screenshot via WebSocket');
+            this.socket.emit('request_screenshot');
         });
         
         this.socket.on('disconnect', () => {
-            console.log('Disconnected from server');
+            console.log('❌ Disconnected from server via WebSocket');
             this.isConnected = false;
             this.updateConnectionStatus(false);
             this.showNotification('Disconnected from server', 'error');
         });
         
         this.socket.on('frame', (data) => {
+            console.log('Received frame data:', data ? 'yes' : 'no', data && data.data ? `${data.data.length} chars` : 'no data');
             this.updateGameFrame(data);
         });
         
@@ -408,8 +413,15 @@ class PokemonDashboard {
     }
     
     updateGameFrame(data) {
+        console.log('updateGameFrame called with:', data ? 'data exists' : 'no data');
         const gameFrame = document.getElementById('game-frame');
-        gameFrame.src = `data:image/jpeg;base64,${data.data}`;
+        // Support both PNG and JPEG formats
+        if (data && data.data) {
+            gameFrame.src = `data:image/png;base64,${data.data}`;
+            console.log('Updated game frame src with', data.data.length, 'characters');
+        } else {
+            console.log('No frame data to display');
+        }
         
         // Update resolution display
         if (data.size) {
